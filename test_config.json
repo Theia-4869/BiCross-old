@@ -1,0 +1,21 @@
+{
+    "general":{
+        "device":"cuda",
+        "seed":0,
+        "dataset":"weather",
+        "weather":"rainy",
+        "modality":"spike",
+        "model_type":"hybrid",
+        "loss_depth":"sig",
+        "loss_uncertainty":"l1",
+        "path_rgb_checkpoint": "checkpoints/backbone_hybrid_gpu_1_bsz_16_cloudy_rgb_imagenet_pretrain/DPTDepthModel_best.pt",
+        "path_spike_checkpoint": "checkpoints/backbone_hybrid_gpu_1_bsz_8_cloudy_spike_rainy_crossdomain/DPTDepthModel_best.pt"
+    },
+    "wandb":{
+        "enable":false,
+        "username":"theia",
+        "images_to_show":1,
+        "im_h":540,
+        "im_w":980
+    }
+}

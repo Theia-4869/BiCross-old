@@ -1,0 +1,37 @@
+{
+    "general":{
+        "device":"cuda",
+        "seed":0,
+        "dataset":["vkitti", "kitti"],
+        "weather":"cloudy",
+        "stage":"crossdomain",
+        "method":"meanteacher",
+        "neuromorphic":"usenet",
+        "warmup":true,
+        "warmup_step":4,
+        "modality":"spike",
+        "batch_size":8,
+        "alpha":0.999,
+        "beta":0.01,
+        "model_type":"hybrid",
+        "epochs":20,
+        "loss_depth":"sig",
+        "loss_uncertainty":"l1",
+        "loss_distillation":"mse",
+        "optim":"adam",
+        "lr_backbone":1e-5,
+        "lr_scratch":1e-4,
+        "momentum":0.9,
+        "save_model":true,
+        "path_model":"checkpoints/backbone_hybrid_gpu_1_bsz_8_vkitti_spike_kitti_crossdomain",
+        "path_rgb_pretrain": "checkpoints/backbone_hybrid_gpu_1_bsz_16_vkitti_rgb_imagenet_pretrain/DPTDepthModel_best.pt",
+        "path_spike_pretrain": "checkpoints/backbone_hybrid_gpu_1_bsz_8_vkitti_spike_kitti_crossmodality/DPTDepthModel_best.pt"
+    },
+    "wandb":{
+        "enable":false,
+        "username":"theia",
+        "images_to_show":1,
+        "im_h":540,
+        "im_w":980
+    }
+}
