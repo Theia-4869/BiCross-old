@@ -4,7 +4,7 @@
         "seed":0,
         "dataset":"weather",
         "weather":"rainy",
-        "modality":"spike",
+        "modality":"rgb",
         "model_type":"hybrid",
         "loss_depth":"sig",
         "loss_uncertainty":"l1",
@@ -12,8 +12,9 @@
         "path_spike_checkpoint": "checkpoints/backbone_hybrid_gpu_1_bsz_8_cloudy_spike_rainy_crossdomain/DPTDepthModel_best.pt"
     },
     "wandb":{
-        "enable":false,
+        "enable":true,
         "username":"username",
+        "name":"cloudy_rainy_bicross",
         "images_to_show":1,
         "im_h":540,
         "im_w":980

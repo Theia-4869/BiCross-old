@@ -6,7 +6,7 @@
         "weather":"cloudy",
         "stage":"crossdomain",
         "method":"meanteacher",
-        "neuromorphic":"usenet",
+        "neuromorphic":"senet",
         "warmup":true,
         "warmup_step":4,
         "modality":"spike",
@@ -29,7 +29,7 @@
     },
     "wandb":{
         "enable":false,
-        "username":"theia",
+        "username":"username",
         "images_to_show":1,
         "im_h":540,
         "im_w":980

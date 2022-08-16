@@ -18,11 +18,11 @@ np.random.seed(config['general']['seed'])
 
 if "vkitti" in config['general']['dataset']:
     train_vkitti_dataset = VKITTI(
-        dataset_path = "/home/notebook/data/group/liujiaming/spike/dataset_aaai/vkitti/2.0.3",
+        dataset_path = "dataset_aaai/vkitti/2.0.3",
         mode='train',
     )
     test_vkitti_dataset = VKITTI(
-        dataset_path = "/home/notebook/data/group/liujiaming/spike/dataset_aaai/vkitti/2.0.3",
+        dataset_path = "dataset_aaai/vkitti/2.0.3",
         mode='test',
     )
 
@@ -42,11 +42,11 @@ if "vkitti" in config['general']['dataset']:
     )
 if "kitti" in config['general']['dataset']:
     train_kitti_dataset = KITTI(
-        dataset_path = "/home/notebook/data/group/liujiaming/spike/dataset_aaai/kitti",
+        dataset_path = "dataset_aaai/kitti",
         mode='train',
     )
     test_kitti_dataset = KITTI(
-        dataset_path = "/home/notebook/data/group/liujiaming/spike/dataset_aaai/kitti",
+        dataset_path = "dataset_aaai/kitti",
         mode='test',
     )
 
@@ -66,11 +66,11 @@ if "kitti" in config['general']['dataset']:
     )
 if "ekitti" in config['general']['dataset']:
     train_ekitti_dataset = EKITTI(
-        dataset_path = "/home/notebook/data/group/liujiaming/spike/dataset_aaai/ekitti",
+        dataset_path = "dataset_aaai/ekitti",
         mode='train',
     )
     test_ekitti_dataset = EKITTI(
-        dataset_path = "/home/notebook/data/group/liujiaming/spike/dataset_aaai/ekitti",
+        dataset_path = "dataset_aaai/ekitti",
         mode='test',
         testId=39,
     )
@@ -91,11 +91,11 @@ if "ekitti" in config['general']['dataset']:
     )
 if "drivingstereo" in config['general']['dataset']:
     train_drivingstereo_dataset = DrivingStereo(
-        dataset_path = "/home/notebook/data/group/liujiaming/spike/dataset_aaai/drivingstereo",
+        dataset_path = "dataset_aaai/drivingstereo",
         mode='train',
     )
     test_drivingstereo_dataset = DrivingStereo(
-        dataset_path = "/home/notebook/data/group/liujiaming/spike/dataset_aaai/drivingstereo",
+        dataset_path = "dataset_aaai/drivingstereo",
         mode='test',
     )
 
@@ -115,12 +115,12 @@ if "drivingstereo" in config['general']['dataset']:
     )
 if "weather" in config['general']['dataset']:
     train_weather_dataset = DrivingStereoWeather(
-        dataset_path = "/home/notebook/data/group/liujiaming/spike/dataset_aaai/drivingstereoweather",
+        dataset_path = "dataset_aaai/drivingstereoweather",
         mode='train',
         weather=config['general']['weather'],
     )
     test_weather_dataset = DrivingStereoWeather(
-        dataset_path = "/home/notebook/data/group/liujiaming/spike/dataset_aaai/drivingstereoweather",
+        dataset_path = "dataset_aaai/drivingstereoweather",
         mode='test',
         weather=config['general']['weather'],
     )
@@ -141,17 +141,17 @@ if "weather" in config['general']['dataset']:
     )
 if "weathers" in config['general']['dataset']:
     train_source_dataset = DrivingStereoWeather(
-        dataset_path = "/home/notebook/data/group/liujiaming/spike/dataset_aaai/drivingstereoweather",
+        dataset_path = "dataset_aaai/drivingstereoweather",
         mode='train',
         weather=config['general']['weather'][0],
     )
     train_target_dataset = DrivingStereoWeather(
-        dataset_path = "/home/notebook/data/group/liujiaming/spike/dataset_aaai/drivingstereoweather",
+        dataset_path = "dataset_aaai/drivingstereoweather",
         mode='train',
         weather=config['general']['weather'][1],
     )
     test_target_dataset = DrivingStereoWeather(
-        dataset_path = "/home/notebook/data/group/liujiaming/spike/dataset_aaai/drivingstereoweather",
+        dataset_path = "dataset_aaai/drivingstereoweather",
         mode='test',
         weather=config['general']['weather'][1],
     )

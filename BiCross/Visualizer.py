@@ -13,7 +13,7 @@ from timm. models. layers import StdConv2dSame
 from BiCross.utils import get_losses, get_optimizer, get_schedulers, create_dir
 from DPT.models import DPTDepthModel
 
-class Tester(object):
+class Visualizer(object):
     def __init__(self, config):
         super().__init__()
         self.config = config
@@ -72,17 +72,18 @@ class Tester(object):
         else:
             raise ValueError("wrong model type: ", config['general']['model_type'])
 
-        # if config['general']['modality'] == 'spike':
-        #     self.model.pretrained.model.patch_embed.backbone.stem.conv = StdConv2dSame(128, 64, kernel_size=(7, 7), stride=(2, 2), bias=False)
-
         self.model.to(self.device)
 
         # depth loss
         self.loss_depth, self.loss_uncertainty, self.loss_consistency = get_losses(config)
 
-    def test(self, test_dataloader):
+    def visualize(self, test_dataloader):
         if self.config['wandb']['enable']:
-            wandb.init(project="BiCross-test", entity=self.config['wandb']['username'])
+            wandb.init(
+                project="BiCross-vis",
+                name=self.config['wandb']['name'],
+                entity=self.config['wandb']['username'],
+            )
 
         new_val_loss, abs_rel = self.run_eval(test_dataloader)
 
@@ -98,34 +99,41 @@ class Tester(object):
 
         val_loss = 0.
         rgb_1 = None
+        spike_1 = None
         depth_1 = None
         output_1 = None
+        uncertainty_1 = None
+        path_1_1 = None
+        path_2_1 = None
+        path_3_1 = None
+        path_4_1 = None
         errors = {"abs_rel":0, "sq_rel":0, "rmse":0, "rmse_log":0, "a1":0, "a2":0,"a3":0}
 
         length = len(val_dataloader)
         with torch.no_grad():
             pbar = tqdm(val_dataloader)
-            pbar.set_description("Validation ...")
+            pbar.set_description("Visualizing ...")
 
             for i, sample in enumerate(pbar):
-                if self.config['general']['modality'] == 'rgb':
-                    rgb = sample['rgb']
-                    rgb = rgb.to(self.device)
-                elif self.config['general']['modality'] == 'spike':
-                    spike = sample['spike']
-                    spike = spike.to(self.device)
-                depth = sample['depth']
-                depth = depth.to(self.device)
+                rgb, spike, depth = sample['rgb'],  sample['spike'], sample['depth']
+                rgb, spike, depth = rgb.to(self.device), spike.to(self.device), depth.to(self.device)
                 
                 if self.config['general']['modality'] == 'rgb':
-                    output, _, _, _, _, _, _, _ = self.model(rgb)
+                    output, uncertainty, path_1, path_2, path_3, path_4, layer_4, cls_token = self.model(rgb)
                 elif self.config['general']['modality'] == 'spike':
-                    output, _, _, _, _, _, _, _ = self.model(spike)
+                    output, uncertainty, path_1, path_2, path_3, path_4, layer_4, cls_token = self.model(spike)
 
                 output = output.unsqueeze(1)
+                uncertainty = uncertainty.unsqueeze(1)
                 if "kitti" in self.config['general']['dataset']:
                     output = torch.nn.functional.interpolate(
                         output,
+                        size=[352, 1216],
+                        mode="bicubic",
+                        align_corners=False,
+                    )
+                    uncertainty = torch.nn.functional.interpolate(
+                        uncertainty,
                         size=[352, 1216],
                         mode="bicubic",
                         align_corners=False,
@@ -137,7 +145,14 @@ class Tester(object):
                         mode="bicubic",
                         align_corners=False,
                     )
+                    uncertainty = torch.nn.functional.interpolate(
+                        uncertainty,
+                        size=[384, 864],
+                        mode="bicubic",
+                        align_corners=False,
+                    )
                 output = output.squeeze(1)
+                uncertainty = uncertainty.squeeze(1)
 
                 depth = depth.squeeze(1) #1xHxW -> HxW
                 _, height, width = depth.shape
@@ -166,9 +181,16 @@ class Tester(object):
                 eval_mask[:, int(0.40810811 * height):int(0.99189189 * height), int(0.03594771 * width):int(0.96405229 * width)] = 1
                 valid_mask = torch.logical_and(valid_mask, eval_mask)
 
-                if i==0:
-                    depth_1 = depth
-                    output_1 = output
+                rgb_1 = rgb
+                spike_1 = spike
+                depth_1 = depth
+                output_1 = output
+                uncertainty_1 = uncertainty
+                path_1_1 = path_1[:, 0, :, :]
+                path_2_1 = path_2[:, 0, :, :]
+                path_3_1 = path_3[:, 0, :, :]
+                path_4_1 = path_4[:, 0, :, :]
+                self.img_logger(rgb_1, spike_1, depth_1, output_1, uncertainty_1, path_1_1, path_2_1, path_3_1, path_4_1)
 
                 # get loss
                 loss = self.loss_depth(output[valid_mask], depth[valid_mask])
@@ -210,39 +232,85 @@ class Tester(object):
 
             if self.config['wandb']['enable']:
                 wandb.log({"val_abs_rel": abs_rel})
+                wandb.log({"val_sq_rel": sq_rel})
                 wandb.log({"val_rmse": rmse})
+                wandb.log({"val_rmse_log": rmse_log})
                 wandb.log({"val_a1": a1})
-                # wandb.log({"val_a2": a2})
-                # wandb.log({"val_a3": a3})
+                wandb.log({"val_a2": a2})
+                wandb.log({"val_a3": a3})
                 wandb.log({"val_loss": val_loss/(i+1)})
-                self.img_logger(rgb_1, depth_1, output_1, data_type=data_type)
         
         return val_loss/(i+1), abs_rel
 
-    def img_logger(self, rgb, depth, output, data_type=""):
-        nb_to_show = self.config['wandb']['images_to_show'] if self.config['wandb']['images_to_show'] <= len(X) else len(X)
-        tmp = X[:nb_to_show].detach().cpu().numpy()
-        imgs = (tmp - tmp.min()) / (tmp.max() - tmp.min())
-        if output != None:
-            tmp = depth[:nb_to_show].unsqueeze(1).detach().cpu().numpy()
-            depth_truths = np.repeat(tmp, 3, axis=1) / tmp.max()
-            depth_preds = output[:nb_to_show].unsqueeze(1).detach().cpu().numpy()
-            depth_preds = np.repeat(depth_preds, 3, axis=1) / depth_preds.max()
+    def img_logger(self, rgb, spike, depth, output, uncertainty, path_1, path_2, path_3, path_4):
+        nb_to_show = self.config['wandb']['images_to_show'] if self.config['wandb']['images_to_show'] <= len(rgb) else len(rgb)
+
+        tmp = rgb[:nb_to_show].detach().cpu().numpy()
+        rgbs = (tmp - tmp.min() + 1e-8) / (tmp.max() - tmp.min())
+
+        tmp = np.repeat(np.mean(spike[:nb_to_show][:, 0:16, :, :].unsqueeze(2).detach().cpu().numpy(), axis=1), 3, axis=1)
+        spikes = (tmp - tmp.min() + 1e-8) / (tmp.max() - tmp.min())
+
+        tmp = depth[:nb_to_show].detach().cpu().numpy()
+        depths = (tmp - tmp.min() + 1e-8) / (tmp.max() - tmp.min())
+
+        tmp = output[:nb_to_show].detach().cpu().numpy()
+        outputs = (tmp - tmp.min() + 1e-8) / (tmp.max() - tmp.min())
+
+        tmp = torch.abs(output - depth) / depth
+        tmp[tmp > 1.0] = 1.0
+        tmp = np.repeat(tmp[:nb_to_show].unsqueeze(1).detach().cpu().numpy(), 3, axis=1)
+        errors = (tmp - tmp.min() + 1e-8) / (tmp.max() - tmp.min())
+
+        tmp = np.repeat(uncertainty[:nb_to_show].unsqueeze(1).detach().cpu().numpy(), 3, axis=1)
+        uncertainties = (tmp - tmp.min() + 1e-8) / (tmp.max() - tmp.min())
+
+        tmp = path_1[:nb_to_show].detach().cpu().numpy()
+        paths_1 = (tmp - tmp.min() + 1e-8) / (tmp.max() - tmp.min())
+
+        # tmp = path_2[:nb_to_show].detach().cpu().numpy()
+        # paths_2 = (tmp - tmp.min() + 1e-8) / (tmp.max() - tmp.min())
+
+        # tmp = path_3[:nb_to_show].detach().cpu().numpy()
+        # paths_3 = (tmp - tmp.min() + 1e-8) / (tmp.max() - tmp.min())
+
+        # tmp = path_4[:nb_to_show].detach().cpu().numpy()
+        # paths_4 = (tmp - tmp.min() + 1e-8) / (tmp.max() - tmp.min())
         
-        imgs = imgs.transpose(0,2,3,1)
-        if output != None:
-            depth_truths = depth_truths.transpose(0,2,3,1)
-            depth_preds = depth_preds.transpose(0,2,3,1)
-        
+        rgbs = rgbs.transpose(0,2,3,1)
+        spikes = spikes.transpose(0,2,3,1)
+
+        # depth = (depth-0.3)*2
+        # depth[depth < 0.0] = 0.0
+        # depth[depth > 1.0] = 1.0
+
+        # output = (output-0.3)*2
+        # output[output < 0.0] = 0.0
+        # output[output > 1.0] = 1.0
+
+        depths = np.uint8(depths * 255)
+        outputs = np.uint8(outputs * 255)
+
+        errors = errors.transpose(0,2,3,1)
+        uncertainties = uncertainties.transpose(0,2,3,1)
+        paths_1 = np.uint8(paths_1 * 255)
+        # paths_2 = np.uint8(paths_2 * 255)
+        # paths_3 = np.uint8(paths_3 * 255)
+        # paths_4 = np.uint8(paths_4 * 255)
+
         output_dim = (int(self.config['wandb']['im_w']), int(self.config['wandb']['im_h']))
-        # wandb.log({
-        #     "img": [wandb.Image(cv2.resize(im, output_dim), caption='img_{}'.format(i+1)) for i, im in enumerate(imgs)]
-        # })
-        if output != None:
-            wandb.log({
-                "depth_truths": [wandb.Image(cv2.resize(im, output_dim), caption='depth_truths_{}'.format(i+1)) for i, im in enumerate(depth_truths)],
-                "depth_preds": [wandb.Image(cv2.resize(im, output_dim), caption='depth_preds_{}'.format(i+1)) for i, im in enumerate(depth_preds)]
-            })
+        wandb.log({
+            "rgb": [wandb.Image(cv2.resize(im, output_dim), caption='rgb_{}'.format(i+1)) for i, im in enumerate(rgbs)],
+            "spike": [wandb.Image(cv2.resize(im, output_dim), caption='spike_{}'.format(i+1)) for i, im in enumerate(spikes)],
+            "depth": [wandb.Image(cv2.applyColorMap(cv2.resize(im, output_dim), cv2.COLORMAP_RAINBOW), caption='depth_{}'.format(i+1)) for i, im in enumerate(depths)],
+            "output": [wandb.Image(cv2.applyColorMap(cv2.resize(im, output_dim), cv2.COLORMAP_RAINBOW), caption='output_{}'.format(i+1)) for i, im in enumerate(outputs)],
+            "error": [wandb.Image(cv2.resize(im, output_dim), caption='error_{}'.format(i+1)) for i, im in enumerate(errors)],
+            "uncertainty": [wandb.Image(cv2.resize(im, output_dim), caption='uncertainty_{}'.format(i+1)) for i, im in enumerate(uncertainties)],
+            "feature": [wandb.Image(cv2.applyColorMap(cv2.resize(im, output_dim), cv2.COLORMAP_JET), caption='feature_{}'.format(i+1)) for i, im in enumerate(paths_1)],
+            # "path_2": [wandb.Image(cv2.applyColorMap(cv2.resize(im, output_dim), cv2.COLORMAP_JET), caption='path_2_{}'.format(i+1)) for i, im in enumerate(paths_2)],
+            # "path_3": [wandb.Image(cv2.applyColorMap(cv2.resize(im, output_dim), cv2.COLORMAP_JET), caption='path_3_{}'.format(i+1)) for i, im in enumerate(paths_3)],
+            # "path_4": [wandb.Image(cv2.applyColorMap(cv2.resize(im, output_dim), cv2.COLORMAP_JET), caption='path_4_{}'.format(i+1)) for i, im in enumerate(paths_4)],
+        })
 
     def validate_errors(self, gt, pred): # for disparity
         thresh = np.maximum((gt / pred), (pred / gt))
