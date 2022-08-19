@@ -1,11 +1,9 @@
 import os
-import copy
 import torch
 torch.cuda.current_device()
 import numpy as np
 import wandb
 
-from os import replace
 from tqdm import tqdm
 from itertools import cycle
 from cv2 import cv2
@@ -22,59 +20,60 @@ class DomainCrosser(object):
         self.config = config
         self.device = torch.device(self.config['general']['device'] if torch.cuda.is_available() else "cpu")
         self.alpha = config['general']['alpha']
+        self.dmax = config['general']['dmax']
 
         spike_input = False
         if config['general']['modality'] == 'spike':
             spike_input = True
         
         if config['general']['stage'] == 'crossdomain':
-            if config['general']['model_type'] == 'vit_base':
-                self.model_student = DPTDepthModel(
-                    path=None,
-                    scale=0.00006016,
-                    shift=0.00579,
-                    invert=True,
-                    backbone='vitb16_384',
-                    non_negative=False,
-                    enable_attention_hooks=False,
-                    with_uncertainty=True,
-                    spike_input=spike_input,
-                )
-                self.model_teacher = DPTDepthModel(
-                    path=None,
-                    scale=0.00006016,
-                    shift=0.00579,
-                    invert=True,
-                    backbone='vitb16_384',
-                    non_negative=False,
-                    enable_attention_hooks=False,
-                    with_uncertainty=True,
-                    spike_input=spike_input,
-                )
-
-            elif config['general']['model_type'] == 'hybrid':
-                self.model_student = DPTDepthModel(
-                    path=config['general']['path_spike_pretrain'],
-                    scale=0.00006016,
-                    shift=0.00579,
-                    invert=True,
-                    backbone="vitb_rn50_384",
-                    non_negative=False,
-                    enable_attention_hooks=False,
-                    with_uncertainty=True,
-                    spike_input=spike_input,
-                )
-                self.model_teacher = DPTDepthModel(
-                    path=config['general']['path_spike_pretrain'],
-                    scale=0.00006016,
-                    shift=0.00579,
-                    invert=True,
-                    backbone="vitb_rn50_384",
-                    non_negative=False,
-                    enable_attention_hooks=False,
-                    with_uncertainty=True,
-                    spike_input=spike_input,
-                )
+            if config['general']['model_type'] == 'hybrid':
+                if config['general']['scene'] == 'outdoor':
+                    self.model_student = DPTDepthModel(
+                        path=config['general']['path_spike_pretrain'],
+                        scale=0.00006016,
+                        shift=0.00579,
+                        invert=True,
+                        backbone="vitb_rn50_384",
+                        non_negative=False,
+                        enable_attention_hooks=False,
+                        with_uncertainty=True,
+                        spike_input=spike_input,
+                    )
+                    self.model_teacher = DPTDepthModel(
+                        path=config['general']['path_spike_pretrain'],
+                        scale=0.00006016,
+                        shift=0.00579,
+                        invert=True,
+                        backbone="vitb_rn50_384",
+                        non_negative=False,
+                        enable_attention_hooks=False,
+                        with_uncertainty=True,
+                        spike_input=spike_input,
+                    )
+                elif config['general']['scene'] == 'indoor':
+                    self.model_student = DPTDepthModel(
+                        path=config['general']['path_spike_pretrain'],
+                        scale=0.000305,
+                        shift=0.1378,
+                        invert=True,
+                        backbone="vitb_rn50_384",
+                        non_negative=False,
+                        enable_attention_hooks=False,
+                        with_uncertainty=True,
+                        spike_input=spike_input,
+                    )
+                    self.model_teacher = DPTDepthModel(
+                        path=config['general']['path_spike_pretrain'],
+                        scale=0.000305,
+                        shift=0.1378,
+                        invert=True,
+                        backbone="vitb_rn50_384",
+                        non_negative=False,
+                        enable_attention_hooks=False,
+                        with_uncertainty=True,
+                        spike_input=spike_input,
+                    )
 
             else:
                 raise ValueError("wrong model type: ", config['general']['model_type'])
@@ -174,6 +173,19 @@ class DomainCrosser(object):
                         mode="bicubic",
                         align_corners=False,
                     )
+                elif "nyu" in self.config['general']['dataset'][0]:
+                    output = torch.nn.functional.interpolate(
+                        output,
+                        size=[480, 640],
+                        mode="bicubic",
+                        align_corners=False,
+                    )
+                    uncertainty = torch.nn.functional.interpolate(
+                        uncertainty,
+                        size=[480, 640],
+                        mode="bicubic",
+                        align_corners=False,
+                    )
                 else:
                     output = torch.nn.functional.interpolate(
                         output,
@@ -193,7 +205,7 @@ class DomainCrosser(object):
                 output[output < 1e-3] = 1e-3
 
                 _, height, width = depth.shape
-                valid_mask = torch.logical_and(depth > 1e-3, depth < 80)
+                valid_mask = torch.logical_and(depth > 1e-3, depth < self.dmax)
                 eval_mask = torch.zeros(valid_mask.shape).to(self.device)
                 eval_mask[:, int(0.40810811 * height):int(0.99189189 * height), int(0.03594771 * width):int(0.96405229 * width)] = 1
                 valid_mask = torch.logical_and(valid_mask, eval_mask)
@@ -269,6 +281,19 @@ class DomainCrosser(object):
                             mode="bicubic",
                             align_corners=False,
                         )
+                    elif "nyu" in self.config['general']['dataset'][0]:
+                        output_source = torch.nn.functional.interpolate(
+                            output_source,
+                            size=[480, 640],
+                            mode="bicubic",
+                            align_corners=False,
+                        )
+                        uncertainty_source = torch.nn.functional.interpolate(
+                            uncertainty_source,
+                            size=[480, 640],
+                            mode="bicubic",
+                            align_corners=False,
+                        )
                     else:
                         output_source = torch.nn.functional.interpolate(
                             output_source,
@@ -287,7 +312,7 @@ class DomainCrosser(object):
                     output_source[output_source < 1e-3] = 1e-3
 
                     _, height, width = source_depth.shape
-                    valid_mask = torch.logical_and(source_depth > 1e-3, source_depth < 80)
+                    valid_mask = torch.logical_and(source_depth > 1e-3, source_depth < self.dmax)
                     eval_mask = torch.zeros(valid_mask.shape).to(self.device)
                     eval_mask[:, int(0.40810811 * height):int(0.99189189 * height), int(0.03594771 * width):int(0.96405229 * width)] = 1
                     valid_mask = torch.logical_and(valid_mask, eval_mask)
@@ -352,12 +377,12 @@ class DomainCrosser(object):
                     output_depths, output_uncertainty, _, _, _, _, _, _ = self.model_student(spike_strong)
 
                     _, height, width = output_depths_pseudo.shape
-                    valid_mask = torch.logical_and(output_depths_pseudo > 1e-3, output_depths_pseudo < 80)
+                    valid_mask = torch.logical_and(output_depths_pseudo > 1e-3, output_depths_pseudo < self.dmax)
                     eval_mask = torch.zeros(valid_mask.shape).to(self.device)
                     eval_mask[:, int(0.40810811 * height):int(0.99189189 * height), int(0.03594771 * width):int(0.96405229 * width)] = 1
                     valid_mask = torch.logical_and(valid_mask, eval_mask)
                     output_uncertainty_pseudo_sorted, _ = torch.sort(output_uncertainty_pseudo[valid_mask])
-                    uncertainty_idx = int(output_uncertainty_pseudo_sorted.shape[0] * (0.99))
+                    uncertainty_idx = int(output_uncertainty_pseudo_sorted.shape[0] * (0.5))
                     uncertainty_thresh = output_uncertainty_pseudo_sorted[uncertainty_idx]
                     uncertainty_mask = output_uncertainty_pseudo < uncertainty_thresh + 1e-8
                     valid_mask = torch.logical_and(valid_mask, uncertainty_mask)
@@ -449,6 +474,20 @@ class DomainCrosser(object):
                         mode="bicubic",
                         align_corners=False,
                     )
+                elif "nyu" in self.config['general']['dataset'][-1]:
+                    output = torch.nn.functional.interpolate(
+                        output,
+                        size=[480, 640],
+                        mode="bicubic",
+                        align_corners=False,
+                    )
+                elif "respike" in self.config['general']['dataset'][-1]:
+                    output = torch.nn.functional.interpolate(
+                        output,
+                        size=[250, 400],
+                        mode="bicubic",
+                        align_corners=False,
+                    )
                 else:
                     output = torch.nn.functional.interpolate(
                         output,
@@ -466,6 +505,16 @@ class DomainCrosser(object):
                     left_margin = int((width - 1216) / 2)
                     output_uncropped = torch.zeros_like(depth, dtype=torch.float32)
                     output_uncropped[:, top_margin:top_margin + 352, left_margin:left_margin + 1216] = output
+                elif "nyu" in self.config['general']['dataset'][-1]:
+                    top_margin = int(height - 480)
+                    left_margin = int((width - 640) / 2)
+                    output_uncropped = torch.zeros_like(depth, dtype=torch.float32)
+                    output_uncropped[:, top_margin:top_margin + 480, left_margin:left_margin + 640] = output
+                elif "respike" in self.config['general']['dataset'][-1]:
+                    top_margin = int(height - 250)
+                    left_margin = int((width - 400) / 2)
+                    output_uncropped = torch.zeros_like(depth, dtype=torch.float32)
+                    output_uncropped[:, top_margin:top_margin + 250, left_margin:left_margin + 400] = output
                 else:
                     top_margin = int(height - 384)
                     left_margin = int((width - 864) / 2)
@@ -474,13 +523,13 @@ class DomainCrosser(object):
                 output = output_uncropped
 
                 output[output < 1e-3] = 1e-3
-                output[output > 80] = 80
-                output[torch.isinf(output)] = 80
+                output[output > self.dmax] = self.dmax
+                output[torch.isinf(output)] = self.dmax
 
                 depth[torch.isinf(depth)] = 0
                 depth[torch.isnan(depth)] = 0
 
-                valid_mask = torch.logical_and(depth > 1e-3, depth < 80)
+                valid_mask = torch.logical_and(depth > 1e-3, depth < self.dmax)
                 eval_mask = torch.zeros(valid_mask.shape).to(self.device)
                 eval_mask[:, int(0.40810811 * height):int(0.99189189 * height), int(0.03594771 * width):int(0.96405229 * width)] = 1
                 valid_mask = torch.logical_and(valid_mask, eval_mask)

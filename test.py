@@ -44,7 +44,6 @@ elif config['general']['dataset'] == "ekitti":
     test_ekitti_dataset = EKITTI(
         dataset_path = "dataset_aaai/ekitti",
         mode='test',
-        testId=39,
     )
     test_ekitti_dataloader = DataLoader(
         test_ekitti_dataset, 
@@ -78,6 +77,31 @@ elif config['general']['dataset'] == "weather":
         num_workers=8,
         drop_last=False
     )
+elif "nyu" in config['general']['dataset']:
+    test_nyu_dataset = NYU(
+        dataset_path = "dataset_aaai/nyu/v2",
+        mode='test',
+    )
+    test_nyu_dataloader = DataLoader(
+        test_nyu_dataset, 
+        batch_size=1, 
+        shuffle=False, 
+        num_workers=8,
+        drop_last=False
+    )
+elif "respike" in config['general']['dataset']:
+    test_respike_dataset = Respike(
+        dataset_path = "dataset_aaai/respike",
+        mode='test',
+        scene='indoor',
+    )
+    test_respike_dataloader = DataLoader(
+        test_respike_dataset, 
+        batch_size=1, 
+        shuffle=False, 
+        num_workers=8,
+        drop_last=False
+    )
 
 tester = Tester(config)
 
@@ -91,3 +115,7 @@ elif config['general']['dataset'] == "drivingstereo":
     tester.test(test_drivingstereo_dataloader)
 elif config['general']['dataset'] == "weather":
     tester.test(test_weather_dataloader)
+elif config['general']['dataset'] == "nyu":
+    tester.test(test_nyu_dataloader)
+elif config['general']['dataset'] == "respike":
+    tester.test(test_respike_dataloader)

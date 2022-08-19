@@ -1,11 +1,9 @@
 import os
-import copy
 import torch
 torch.cuda.current_device()
 import numpy as np
 import wandb
 
-from os import replace
 from tqdm import tqdm
 from cv2 import cv2
 from numpy.core.numeric import Inf
@@ -19,54 +17,52 @@ class ModalityCrosser(object):
         super().__init__()
         self.config = config
         self.device = torch.device(self.config['general']['device'] if torch.cuda.is_available() else "cpu")
-        self.alpha = config['general']['alpha']
+        self.dmax = config['general']['dmax']
         
         if config['general']['stage'] == 'crossmodality':
-            if config['general']['model_type'] == 'vit_base':
-                self.model_rgb = DPTDepthModel(
-                    path=None,
-                    scale=0.00006016,
-                    shift=0.00579,
-                    invert=True,
-                    backbone='vitb16_384',
-                    non_negative=False,
-                    enable_attention_hooks=False,
-                    with_uncertainty=True,
-                )
-                self.model_spike = DPTDepthModel(
-                    path=None,
-                    scale=0.00006016,
-                    shift=0.00579,
-                    invert=True,
-                    backbone='vitb16_384',
-                    non_negative=False,
-                    enable_attention_hooks=False,
-                    with_uncertainty=True,
-                )
-
-            elif config['general']['model_type'] == 'hybrid':
-                self.model_rgb = DPTDepthModel(
-                    # path=None,
-                    path=config['general']['path_rgb_pretrain'],
-                    scale=0.00006016,
-                    shift=0.00579,
-                    invert=True,
-                    backbone="vitb_rn50_384",
-                    non_negative=False,
-                    enable_attention_hooks=False,
-                    with_uncertainty=True,
-                )
-                self.model_spike = DPTDepthModel(
-                    # path=None,
-                    path=config['general']['path_rgb_pretrain'],
-                    scale=0.00006016,
-                    shift=0.00579,
-                    invert=True,
-                    backbone="vitb_rn50_384",
-                    non_negative=False,
-                    enable_attention_hooks=False,
-                    with_uncertainty=True,
-                )
+            if config['general']['model_type'] == 'hybrid':
+                if config['general']['scene'] == 'outdoor':
+                   self.model_rgb = DPTDepthModel(
+                        path=config['general']['path_rgb_pretrain'],
+                        scale=0.00006016,
+                        shift=0.00579,
+                        invert=True,
+                        backbone="vitb_rn50_384",
+                        non_negative=False,
+                        enable_attention_hooks=False,
+                        with_uncertainty=True,
+                    )
+                    self.model_spike = DPTDepthModel(
+                        path=config['general']['path_rgb_pretrain'],
+                        scale=0.00006016,
+                        shift=0.00579,
+                        invert=True,
+                        backbone="vitb_rn50_384",
+                        non_negative=False,
+                        enable_attention_hooks=False,
+                        with_uncertainty=True,
+                    )
+                elif config['general']['scene'] == 'indoor':
+                    self.model_rgb = DPTDepthModel(
+                        path=config['general']['path_rgb_pretrain'],
+                        scale=0.000305,
+                        shift=0.1378,
+                        invert=True,
+                        backbone="vitb_rn50_384",
+                        non_negative=False,
+                        enable_attention_hooks=False,
+                        with_uncertainty=True,
+                    )
+                    self.model_spike = DPTDepthModel(
+                        path=config['general']['path_rgb_pretrain'],
+                        scale=0.000305,
+                        shift=0.1378,
+                        invert=True,
+                        backbone="vitb_rn50_384",
+                        non_negative=False,
+                        enable_attention_hooks=False,
+                        with_uncertainty=True,
+                    )
 
             else:
                 raise ValueError("wrong model type: ", config['general']['model_type'])
@@ -110,7 +106,6 @@ class ModalityCrosser(object):
         self.optimizer_backbone, self.optimizer_scratch = get_optimizer(config, self.model_spike)
         self.optimizer_head_rgb = torch.optim.Adam(self.head_rgb.parameters(), lr=config['general']['lr_backbone'])
         self.optimizer_head_spike = torch.optim.Adam(self.head_spike.parameters(), lr=config['general']['lr_backbone'])
-        # self.schedulers = get_schedulers([self.optimizer_backbone, self.optimizer_scratch])
         self.schedulers = get_schedulers([self.optimizer_backbone, self.optimizer_scratch, self.optimizer_head_rgb, self.optimizer_head_spike])
 
     def train(self, dataloaders):
@@ -139,7 +134,7 @@ class ModalityCrosser(object):
             self.head_spike.train()
 
             pbar = tqdm(train_dataloader)
-            pbar.set_description("Distillating ...")
+            pbar.set_description("Crossing modality ...")
 
             for batch_idx, sample in enumerate(pbar):
                 rgb, spike, depth = sample['rgb'], sample['spike'], sample['depth']
@@ -158,6 +153,20 @@ class ModalityCrosser(object):
                     output_rgb = torch.nn.functional.interpolate(
                         output_rgb,
                         size=[352, 1216],
+                        mode="bicubic",
+                        align_corners=False,
+                    )
+                elif "nyu" in self.config['general']['dataset'][-1]:
+                    output_rgb = torch.nn.functional.interpolate(
+                        output_rgb,
+                        size=[480, 640],
+                        mode="bicubic",
+                        align_corners=False,
+                    )
+                elif "respike" in self.config['general']['dataset'][-1]:
+                    output_rgb = torch.nn.functional.interpolate(
+                        output_rgb,
+                        size=[250, 400],
                         mode="bicubic",
                         align_corners=False,
                     )
@@ -189,6 +198,32 @@ class ModalityCrosser(object):
                         mode="bicubic",
                         align_corners=False,
                     )
+                elif "nyu" in self.config['general']['dataset'][-1]:
+                    output_spike = torch.nn.functional.interpolate(
+                        output_spike,
+                        size=[480, 640],
+                        mode="bicubic",
+                        align_corners=False,
+                    )
+                    uncertainty = torch.nn.functional.interpolate(
+                        uncertainty,
+                        size=[480, 640],
+                        mode="bicubic",
+                        align_corners=False,
+                    )
+                elif "respike" in self.config['general']['dataset'][-1]:
+                    output_spike = torch.nn.functional.interpolate(
+                        output_spike,
+                        size=[250, 400],
+                        mode="bicubic",
+                        align_corners=False,
+                    )
+                    uncertainty = torch.nn.functional.interpolate(
+                        uncertainty,
+                        size=[250, 400],
+                        mode="bicubic",
+                        align_corners=False,
+                    )
                 else:
                     output_spike = torch.nn.functional.interpolate(
                         output_spike,
@@ -207,7 +242,7 @@ class ModalityCrosser(object):
                 output_spike[output_spike < 1e-3] = 1e-3
 
                 _, height, width = depth.shape
-                valid_mask = torch.logical_and(depth > 1e-3, depth < 80)
+                valid_mask = torch.logical_and(depth > 1e-3, depth < self.dmax)
                 eval_mask = torch.zeros(valid_mask.shape).to(self.device)
                 eval_mask[:, int(0.40810811 * height):int(0.99189189 * height), int(0.03594771 * width):int(0.96405229 * width)] = 1
                 valid_mask = torch.logical_and(valid_mask, eval_mask)
@@ -219,9 +254,9 @@ class ModalityCrosser(object):
                 loss_uncertainty = self.loss_uncertainty(uncertainty[valid_mask], output_spike[valid_mask], depth[valid_mask])
 
                 # get contrastive loss
-                # layer_4_rgb = self.head_rgb(layer_4_rgb)
-                # layer_4_spike = self.head_spike(layer_4_spike)
-                # loss_contrastive = self.loss_contrastive(layer_4_rgb, layer_4_spike)
+                layer_4_rgb = self.head_rgb(layer_4_rgb)
+                layer_4_spike = self.head_spike(layer_4_spike)
+                loss_contrastive = self.loss_contrastive(layer_4_rgb, layer_4_spike)
 
                 # get dist loss
                 # loss_dist1 = self.loss_dist(path_1_rgb, path_1_spike)
@@ -231,7 +266,7 @@ class ModalityCrosser(object):
                 # loss_dist5 = self.loss_dist(output_rgb, output_spike)
 
                 # get all loss
-                loss = loss_depth + loss_uncertainty + 0.01*(loss_dist4)# * (1-epoch/epochs)
+                loss = loss_depth + loss_uncertainty + 0.01*(loss_contrastive + loss_dist4)# * (1-epoch/epochs)
 
                 loss.backward()
 
@@ -307,6 +342,20 @@ class ModalityCrosser(object):
                         mode="bicubic",
                         align_corners=False,
                     )
+                elif "nyu" in self.config['general']['dataset'][-1]:
+                    output = torch.nn.functional.interpolate(
+                        output,
+                        size=[480, 640],
+                        mode="bicubic",
+                        align_corners=False,
+                    )
+                elif "respike" in self.config['general']['dataset'][-1]:
+                    output = torch.nn.functional.interpolate(
+                        output,
+                        size=[250, 400],
+                        mode="bicubic",
+                        align_corners=False,
+                    )
                 else:
                     output = torch.nn.functional.interpolate(
                         output,
@@ -324,6 +373,16 @@ class ModalityCrosser(object):
                     left_margin = int((width - 1216) / 2)
                     output_uncropped = torch.zeros_like(depth, dtype=torch.float32)
                     output_uncropped[:, top_margin:top_margin + 352, left_margin:left_margin + 1216] = output
+                elif "nyu" in self.config['general']['dataset'][-1]:
+                    top_margin = int(height - 480)
+                    left_margin = int((width - 640) / 2)
+                    output_uncropped = torch.zeros_like(depth, dtype=torch.float32)
+                    output_uncropped[:, top_margin:top_margin + 480, left_margin:left_margin + 640] = output
+                elif "respike" in self.config['general']['dataset'][-1]:
+                    top_margin = int(height - 250)
+                    left_margin = int((width - 400) / 2)
+                    output_uncropped = torch.zeros_like(depth, dtype=torch.float32)
+                    output_uncropped[:, top_margin:top_margin + 250, left_margin:left_margin + 400] = output
                 else:
                     top_margin = int(height - 384)
                     left_margin = int((width - 864) / 2)
@@ -332,13 +391,13 @@ class ModalityCrosser(object):
                 output = output_uncropped
 
                 output[output < 1e-3] = 1e-3
-                output[output > 80] = 80
-                output[torch.isinf(output)] = 80
+                output[output > self.dmax] = self.dmax
+                output[torch.isinf(output)] = self.dmax
 
                 depth[torch.isinf(depth)] = 0
                 depth[torch.isnan(depth)] = 0
 
-                valid_mask = torch.logical_and(depth > 1e-3, depth < 80)
+                valid_mask = torch.logical_and(depth > 1e-3, depth < self.dmax)
                 eval_mask = torch.zeros(valid_mask.shape).to(self.device)
                 eval_mask[:, int(0.40810811 * height):int(0.99189189 * height), int(0.03594771 * width):int(0.96405229 * width)] = 1
                 valid_mask = torch.logical_and(valid_mask, eval_mask)

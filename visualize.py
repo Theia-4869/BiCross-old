@@ -102,6 +102,31 @@ elif config['general']['dataset'] == "weather":
         num_workers=8,
         drop_last=False
     )
+elif "nyu" in config['general']['dataset']:
+    test_nyu_dataset = NYU(
+        dataset_path = "dataset_aaai/nyu/v2",
+        mode='test',
+    )
+    test_nyu_dataloader = DataLoader(
+        test_nyu_dataset, 
+        batch_size=1, 
+        shuffle=False, 
+        num_workers=8,
+        drop_last=False
+    )
+elif "respike" in config['general']['dataset']:
+    test_respike_dataset = Respike(
+        dataset_path = "dataset_aaai/respike",
+        mode='test',
+        scene='indoor',
+    )
+    test_respike_dataloader = DataLoader(
+        test_respike_dataset, 
+        batch_size=1, 
+        shuffle=False, 
+        num_workers=8,
+        drop_last=False
+    )
 
 visualizer = Visualizer(config)
 visualizer.visualize(test_dataloader)

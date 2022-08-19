@@ -2,9 +2,11 @@
     "general":{
         "device":"cuda",
         "seed":0,
+        "scene":"outdoor",
         "dataset":"weather",
         "weather":"rainy",
-        "modality":"rgb",
+        "modality":"spike",
+        "dmax":80,
         "model_type":"hybrid",
         "loss_depth":"sig",
         "loss_uncertainty":"l1",

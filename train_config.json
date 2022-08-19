@@ -2,6 +2,7 @@
     "general":{
         "device":"cuda",
         "seed":0,
+        "scene":"outdoor",
         "dataset":["vkitti", "kitti"],
         "weather":"cloudy",
         "stage":"crossdomain",
@@ -11,6 +12,7 @@
         "warmup_step":4,
         "modality":"spike",
         "batch_size":8,
+        "dmax":80,
         "alpha":0.999,
         "beta":0.01,
         "model_type":"hybrid",
