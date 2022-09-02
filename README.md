@@ -22,7 +22,7 @@ You can modify the configs for different training configurations.
 ## Demo
 
 <iframe 
-src="/demo/demo.mp4" 
+src="demo/demo.mp4" 
 scrolling="no" 
 border="0" 
 frameborder="no" 
