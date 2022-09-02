@@ -18,3 +18,7 @@ python visualize.py
 ```
 
 You can modify the configs for different training configurations.
+
+## Demo
+
+<iframe src="/demo/demo.mp4" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true" >
