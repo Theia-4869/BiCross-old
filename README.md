@@ -21,4 +21,13 @@ You can modify the configs for different training configurations.
 
 ## Demo
 
-<iframe src="/demo/demo.mp4" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true" >
+<iframe 
+src="/demo/demo.mp4" 
+scrolling="no" 
+border="0" 
+frameborder="no" 
+framespacing="0" 
+allowfullscreen="true" 
+height=600 
+width=800> 
+</iframe>
